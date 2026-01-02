@@ -31,7 +31,7 @@
     }
 
     .card{width:min(980px,100%);background:transparent;border-radius:18px;padding:10px 10px 14px;position:relative}
-    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 6px 14px;flex-wrap:wrap}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 6px 8px;flex-wrap:wrap}
     .title{font-family:var(--fontTitle);font-size:clamp(18px,2.4vw,26px);color:var(--blue);font-weight:800;letter-spacing:.2px}
     .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
     select, button{
@@ -40,6 +40,18 @@
     }
     button{cursor:pointer}
     button:hover{transform:translateY(-1px)}
+    .lockMsg{
+      margin:0 6px 10px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:2px solid rgba(231,76,60,.45);
+      background: rgba(231,76,60,.10);
+      color:#9c2f24;
+      font-weight:800;
+      display:none;
+      box-shadow:0 6px 14px rgba(0,0,0,.08);
+    }
+
     .stats{display:flex;gap:10px;flex-wrap:wrap;padding:0 6px 12px;color:rgba(0,0,0,.75);font-size:14px}
     .pill{background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.10);border-radius:999px;padding:8px 10px}
     .pill b{color:rgba(0,0,0,.9)}
@@ -219,6 +231,9 @@
       </div>
     </div>
 
+    <!-- Message verrou Expert -->
+    <div class="lockMsg" id="lockMessage">🔒 Le niveau expert se débloque après avoir <b>terminé</b> le niveau <b>Moyen</b> avec un score suffisant.</div>
+
     <div class="stats">
       <div class="pill">Question : <b id="qnum">0</b>/<b id="qmaxDisp">10</b></div>
       <div class="pill">Score : <b id="score">0</b></div>
@@ -279,10 +294,9 @@
   // ===== Difficulty profiles =====
   const LEVELS = {
     beginner: {
-      // very accessible
       formula: { multiProb: 0.25, multiTerms: [2,2], coefMin: 1, coefMax: 3 },
       count:   { terms: [2,2], coefMin: 1, coefMax: 6 },
-      mix:     { formulaProb: 0.65 } // more formula than counting
+      mix:     { formulaProb: 0.65 }
     },
     medium: {
       formula: { multiProb: 0.55, multiTerms: [2,3], coefMin: 1, coefMax: 5 },
@@ -292,9 +306,13 @@
     expert: {
       formula: { multiProb: 0.80, multiTerms: [3,4], coefMin: 1, coefMax: 8 },
       count:   { terms: [3,4], coefMin: 5, coefMax: 50 },
-      mix:     { formulaProb: 0.45 } // more counting (harder)
+      mix:     { formulaProb: 0.45 }
     }
   };
+
+  // ===== Lock / unlock Expert =====
+  const EXPERT_UNLOCK_KEY = "expertUnlocked";
+  const SCORE_TO_UNLOCK = 70; // % minimum pour débloquer (change si tu veux : 80)
 
   const $ = (id) => document.getElementById(id);
   const elMode = $("mode");
@@ -302,6 +320,7 @@
   const elQmax = $("qmax");
   const elStart = $("start");
   const elNextBubble = $("nextBubble");
+  const elLockMessage = $("lockMessage");
 
   const elQnum = $("qnum");
   const elQmaxDisp = $("qmaxDisp");
@@ -338,8 +357,31 @@
   const randInt = (min, max) => Math.floor(Math.random()*(max-min+1))+min;
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
+  function expertUnlocked(){
+    return localStorage.getItem(EXPERT_UNLOCK_KEY) === "true";
+  }
+
+  function updateExpertLockUI(){
+    const expertOpt = [...elLevel.options].find(o => o.value === "expert");
+    const unlocked = expertUnlocked();
+
+    if (unlocked){
+      expertOpt.disabled = false;
+      expertOpt.textContent = "Expert";
+      elLockMessage.style.display = "none";
+    } else {
+      expertOpt.disabled = true;
+      expertOpt.textContent = "🔒 Expert";
+      elLockMessage.style.display = "block";
+      elLockMessage.innerHTML = `🔒 Le niveau expert se débloque après avoir <b>terminé</b> le niveau <b>Moyen</b> avec au moins <b>${SCORE_TO_UNLOCK}%</b>.`;
+      // si jamais quelqu'un "force" expert (rare), on revient à Moyen
+      if (elLevel.value === "expert") elLevel.value = "medium";
+    }
+  }
+
   function levelCfg(){
-    return LEVELS[elLevel.value] || LEVELS.medium;
+    const lvl = elLevel.value;
+    return LEVELS[lvl] || LEVELS.medium;
   }
 
   function setStats(){
@@ -348,10 +390,12 @@
     elScore.textContent = String(score);
     elStreak.textContent = String(streak);
   }
+
   function hideCorrection(){
     elCorrectionBox.classList.remove("show");
     elCorrectionBody.innerHTML = "";
   }
+
   function resetUI(){
     elCenter.innerHTML = "";
     elEquation.innerHTML = "";
@@ -364,21 +408,40 @@
     elNumInput.value = "";
     hideCorrection();
   }
+
   function setFeedback(text, ok){
     elFeedback.textContent = text;
     elFeedback.className = "feedback " + (ok ? "good" : "bad");
   }
+
   function showCorrection(html){
     elCorrectionBody.innerHTML = html;
     elCorrectionBox.classList.add("show");
   }
+
   function finish(){
     running = false;
     locked = true;
-    resetUI();
+
     const pct = Math.round((score/qMax)*100);
+    const playedLevel = elLevel.value;
+
+    resetUI();
     elQuestion.textContent = `Terminé ! Score : ${score}/${qMax} (${pct}%)`;
-    setFeedback("Tu peux relancer une partie ou changer de mode/niveau.", true);
+
+    // 🔓 Débloquage Expert si niveau Moyen + score suffisant
+    if (playedLevel === "medium" && pct >= SCORE_TO_UNLOCK){
+      if (!expertUnlocked()){
+        localStorage.setItem(EXPERT_UNLOCK_KEY, "true");
+      }
+      updateExpertLockUI();
+      setFeedback("🎉 Bravo ! Tu as débloqué le niveau Expert !", true);
+    } else if (playedLevel === "medium" && !expertUnlocked()){
+      setFeedback(`Pour débloquer Expert : termine le niveau Moyen avec au moins ${SCORE_TO_UNLOCK}%.`, false);
+      updateExpertLockUI();
+    } else {
+      setFeedback("Tu peux relancer une partie ou changer de mode/niveau.", true);
+    }
   }
 
   function makeAtom(sym){
@@ -458,13 +521,6 @@
   function deOrD(sym){
     const map = { H: "d’hydrogène", O: "d’oxygène", N: "d’azote", C: "de carbone" };
     return map[sym] || ("de " + sym);
-  }
-  function atomName(sym){
-    if (sym === "H") return "hydrogène";
-    if (sym === "O") return "oxygène";
-    if (sym === "C") return "carbone";
-    if (sym === "N") return "azote";
-    return sym;
   }
 
   // Hide "1" before formulas when coef === 1
@@ -651,10 +707,6 @@
 
   function buildFormulaQuestion(){
     const cfg = levelCfg().formula;
-
-    // Beginner: mostly single molecules
-    // Medium: mixed
-    // Expert: mostly multi
     const isMulti = Math.random() < cfg.multiProb;
     if (isMulti) buildFormulaMulti();
     else buildFormulaSingle();
@@ -740,7 +792,6 @@
       Object.keys(cts).forEach(e => presentElements.add(e));
     }
 
-    // Expert: sometimes choose an element that appears in only 1 molecule term (harder “piège”)
     let element;
     if (elLevel.value === "expert" && Math.random() < 0.35){
       const elems = [...presentElements];
@@ -835,6 +886,9 @@
   }
 
   function startGame(){
+    // s'assure que l'UI correspond bien à l'état verrou/déverrou
+    updateExpertLockUI();
+
     qMax = Number(elQmax.value);
     qNum = 0; score = 0; streak = 0;
     running = true;
@@ -867,9 +921,21 @@
     });
   }
 
+  // Events
   elStart.addEventListener("click", startGame);
   elNextBubble.addEventListener("click", nextQuestion);
   elCheck.addEventListener("click", checkCountAnswer);
+
+  // si l'élève tente de choisir expert alors que c'est verrouillé
+  elLevel.addEventListener("change", () => {
+    if (elLevel.value === "expert" && !expertUnlocked()){
+      elLevel.value = "medium";
+      updateExpertLockUI();
+      setFeedback(`🔒 Expert est verrouillé : fais d’abord le niveau Moyen (≥ ${SCORE_TO_UNLOCK}%).`, false);
+    } else {
+      updateExpertLockUI();
+    }
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight") nextQuestion();
@@ -879,6 +945,7 @@
   });
 
   buildBackground();
+  updateExpertLockUI();
   setStats();
 })();
 </script>
