@@ -34,7 +34,6 @@
     .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 6px 8px;flex-wrap:wrap}
     .titleWrap{display:flex;flex-direction:column;gap:4px;min-width:240px}
     .title{font-family:var(--fontTitle);font-size:clamp(18px,2.4vw,26px);color:var(--blue);font-weight:800;letter-spacing:.2px;line-height:1.05}
-    /* ✅ Message RGPD petit, sous le titre */
     .rgpdInline{
       font-size:11px;
       color:rgba(0,0,0,.55);
@@ -257,7 +256,7 @@
       </div>
     </div>
 
-    <div class="lockMsg" id="lockMessage">🔒 Le niveau expert se débloque après avoir terminé le niveau Moyen avec un score suffisant.</div>
+    <div class="lockMsg" id="lockMessage"></div>
 
     <div class="stats">
       <div class="pill">Question : <b id="qnum">0</b>/<b id="qmaxDisp">10</b></div>
@@ -324,9 +323,7 @@
     { key:"CO", name:"Monoxyde de carbone", html:"CO", counts:{C:1,O:1}, atoms:["C","O"] }
   ];
 
-  // ✅ limites de coefficients demandées :
   // Débutant : 3 ; Moyen : 10 ; Expert : 20
-  // (le mode compter expert a aussi max=20 pour rester dans ta contrainte)
   const LEVELS = {
     beginner: {
       ftm:   { multiProb: 0.55, terms: [1,2], coefMin: 1, coefMax: 3,  atomProb: 0.35 },
@@ -345,8 +342,16 @@
     }
   };
 
-  const EXPERT_UNLOCK_KEY = "expertUnlocked";
+  // ✅ Déblocage expert INDEPENDANT par mode
+  const EXPERT_UNLOCK_PREFIX = "expertUnlockedByMode:";
   const SCORE_TO_UNLOCK = 70;
+
+  const MODE_LABELS = {
+    mix: "Mixte",
+    formulaToModel: "Passer de la formule au modèle",
+    count: "Compter des atomes",
+    atomOrMolecule: "Atome ou molécule ?"
+  };
 
   const $ = (id) => document.getElementById(id);
   const elMode = $("mode");
@@ -378,6 +383,10 @@
   let running = false, locked = false;
   let current = null;
 
+  // ✅ On fige le mode/niveau au démarrage de la partie
+  let gameMode = "mix";
+  let gameLevel = "medium";
+
   const shuffle = (arr) => {
     const a = arr.slice();
     for (let i=a.length-1;i>0;i--){
@@ -390,33 +399,42 @@
   const randInt = (min, max) => Math.floor(Math.random()*(max-min+1))+min;
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
+  function modeLabel(mode){ return MODE_LABELS[mode] || mode; }
+
+  function unlockKeyFor(mode){ return EXPERT_UNLOCK_PREFIX + mode; }
+  function expertUnlockedFor(mode){
+    return localStorage.getItem(unlockKeyFor(mode)) === "true";
+  }
+  function setExpertUnlockedFor(mode){
+    localStorage.setItem(unlockKeyFor(mode), "true");
+  }
+
   function byMolKey(k){
     return [...MOLECULES, ...EXTRA_MOLECULES_ATOM_OR_MOL].find(m => m.key === k);
   }
 
-  function expertUnlocked(){
-    return localStorage.getItem(EXPERT_UNLOCK_KEY) === "true";
-  }
-
   function updateExpertLockUI(){
+    const mode = elMode.value;
     const expertOpt = [...elLevel.options].find(o => o.value === "expert");
-    const unlocked = expertUnlocked();
+    const unlocked = expertUnlockedFor(mode);
 
     if (unlocked){
       expertOpt.disabled = false;
       expertOpt.textContent = "Expert";
       elLockMessage.style.display = "none";
+      elLockMessage.textContent = "";
     } else {
       expertOpt.disabled = true;
       expertOpt.textContent = "🔒 Expert";
       elLockMessage.style.display = "block";
-      elLockMessage.innerHTML = `🔒 Le niveau expert se débloque après avoir <b>terminé</b> le niveau <b>Moyen</b> avec au moins <b>${SCORE_TO_UNLOCK}%</b>.`;
+      elLockMessage.innerHTML =
+        `🔒 Le niveau expert du mode <b>${modeLabel(mode)}</b> se débloque après avoir <b>terminé</b> le niveau <b>Moyen</b> avec au moins <b>${SCORE_TO_UNLOCK}%</b>.`;
       if (elLevel.value === "expert") elLevel.value = "medium";
     }
   }
 
   function levelCfg(){
-    return LEVELS[elLevel.value] || LEVELS.medium;
+    return LEVELS[gameLevel] || LEVELS.medium;
   }
 
   function setStats(){
@@ -459,25 +477,27 @@
     locked = true;
 
     const pct = Math.round((score/qMax)*100);
-    const playedLevel = elLevel.value;
 
     resetUI();
     elQuestion.textContent = `Terminé ! Score : ${score}/${qMax} (${pct}%)`;
 
-    if (playedLevel === "medium" && pct >= SCORE_TO_UNLOCK){
-      if (!expertUnlocked()){
-        localStorage.setItem(EXPERT_UNLOCK_KEY, "true");
+    // ✅ Déblocage expert selon le MODE de la partie (indépendant)
+    if (gameLevel === "medium" && pct >= SCORE_TO_UNLOCK){
+      if (!expertUnlockedFor(gameMode)){
+        setExpertUnlockedFor(gameMode);
       }
       updateExpertLockUI();
-      setFeedback("🎉 Bravo ! Tu as débloqué le niveau Expert !", true);
-    } else if (playedLevel === "medium" && !expertUnlocked()){
-      setFeedback(`Pour débloquer Expert : termine le niveau Moyen avec au moins ${SCORE_TO_UNLOCK}%.`, false);
+      setFeedback(`🎉 Bravo ! Tu as débloqué le niveau Expert pour le mode “${modeLabel(gameMode)}” !`, true);
+    } else if (gameLevel === "medium" && !expertUnlockedFor(gameMode)){
+      setFeedback(`Pour débloquer Expert dans “${modeLabel(gameMode)}” : termine le niveau Moyen avec au moins ${SCORE_TO_UNLOCK}%.`, false);
       updateExpertLockUI();
     } else {
       setFeedback("Tu peux relancer une partie ou changer de mode/niveau.", true);
+      updateExpertLockUI();
     }
   }
 
+  // ===== Visual helpers =====
   function makeAtom(sym){
     const data = ATOMS[sym];
     const a = document.createElement("div");
@@ -517,21 +537,18 @@
 
   function renderMolModel(molKey, size){
     const m = byMolKey(molKey);
-
     if (m.key === "CH4"){
       const div = document.createElement("div");
       div.className = "molModel " + size;
       div.appendChild(renderMethane(size));
       return wrapRotated(div, size);
     }
-
     const atoms = m.atoms;
     const row = document.createElement("div");
     row.className = "molModel " + size;
     row.style.display = "flex";
     row.style.alignItems = "center";
     row.style.gap = "0px";
-
     atoms.forEach(sym => row.appendChild(makeAtom(sym)));
     return wrapRotated(row, size);
   }
@@ -557,6 +574,7 @@
     return map[sym] || ("de " + sym);
   }
 
+  // ===== Term structure =====
   const BASE_ATOMS_FOR_MAIN_MODES = ["H","O","C","N"];
 
   function termToHTML(t){
@@ -628,20 +646,23 @@
     return wrap;
   }
 
+  // ===== Question selection =====
   function pickQuestionType(){
-    const mode = elMode.value;
+    const mode = gameMode;
     const cfg = levelCfg().mix;
 
     if (mode === "formulaToModel") return "formulaToModel";
     if (mode === "count") return "count";
     if (mode === "atomOrMolecule") return "atomOrMolecule";
 
+    // mixte
     const r = Math.random();
     if (r < cfg.ftmProb) return "formulaToModel";
     if (r < cfg.ftmProb + cfg.countProb) return "count";
     return "atomOrMolecule";
   }
 
+  // ===== Mode: Passer de la formule au modèle =====
   function buildFormulaToModel(){
     const cfg = levelCfg().ftm;
 
@@ -693,13 +714,13 @@
 
     pushOption(terms);
 
-    {
+    { // tweak coef
       const t = terms.map(x => ({...x}));
       const i = randInt(0, t.length-1);
       t[i].coef = clamp(t[i].coef + (Math.random()<0.5 ? 1 : -1), 1, cfg.coefMax);
       pushOption(t);
     }
-    {
+    { // swap symbol/key
       const t = terms.map(x => ({...x}));
       const i = randInt(0, t.length-1);
       if (t[i].kind === "atom"){
@@ -711,7 +732,7 @@
       }
       pushOption(t);
     }
-    {
+    { // change kind
       const t = terms.map(x => ({...x}));
       const i = randInt(0, t.length-1);
       if (t[i].kind === "atom"){
@@ -787,6 +808,7 @@
     setStats();
   }
 
+  // ===== Mode: Compter des atomes =====
   function buildCountQuestion(){
     const cfg = levelCfg().count;
 
@@ -893,6 +915,7 @@
     setStats();
   }
 
+  // ===== Mode: Atome ou molécule ? =====
   function buildAtomOrMolecule(){
     const atomPool = ["H","O","C","N","Co","Cl","Ca"];
     const molPool = [...MOLECULES.map(m=>m.key), ...EXTRA_MOLECULES_ATOM_OR_MOL.map(m=>m.key)];
@@ -971,6 +994,7 @@
     setStats();
   }
 
+  // ===== Flow =====
   function nextQuestion(){
     if (!running) return;
     if (qNum >= qMax){ finish(); return; }
@@ -988,6 +1012,17 @@
   }
 
   function startGame(){
+    // fige mode/niveau pour cette partie
+    gameMode = elMode.value;
+    gameLevel = elLevel.value;
+
+    // sécurité : si expert est choisi mais verrouillé dans CE mode => repasse en moyen
+    if (gameLevel === "expert" && !expertUnlockedFor(gameMode)){
+      gameLevel = "medium";
+      elLevel.value = "medium";
+      setFeedback(`🔒 Expert est verrouillé dans “${modeLabel(gameMode)}” : fais d’abord le niveau Moyen (≥ ${SCORE_TO_UNLOCK}%).`, false);
+    }
+
     updateExpertLockUI();
 
     qMax = Number(elQmax.value);
@@ -998,6 +1033,7 @@
     nextQuestion();
   }
 
+  // ===== Decorative background =====
   function buildBackground(){
     const bg = document.getElementById("bgmols");
     const samples = ["H2O","CO2","O2","H2","N2","CH4","N2O"];
@@ -1021,15 +1057,26 @@
     });
   }
 
+  // Events
   elStart.addEventListener("click", startGame);
   elNextBubble.addEventListener("click", nextQuestion);
   elCheck.addEventListener("click", checkCountAnswer);
 
+  // ✅ Quand on change de mode, on met à jour le verrouillage expert selon CE mode
+  elMode.addEventListener("change", () => {
+    updateExpertLockUI();
+    // si l'utilisateur avait "expert" sélectionné mais que ce mode est verrouillé
+    if (elLevel.value === "expert" && !expertUnlockedFor(elMode.value)){
+      elLevel.value = "medium";
+      setFeedback(`🔒 Expert est verrouillé dans “${modeLabel(elMode.value)}”.`, false);
+    }
+  });
+
   elLevel.addEventListener("change", () => {
-    if (elLevel.value === "expert" && !expertUnlocked()){
+    if (elLevel.value === "expert" && !expertUnlockedFor(elMode.value)){
       elLevel.value = "medium";
       updateExpertLockUI();
-      setFeedback(`🔒 Expert est verrouillé : fais d’abord le niveau Moyen (≥ ${SCORE_TO_UNLOCK}%).`, false);
+      setFeedback(`🔒 Expert est verrouillé dans “${modeLabel(elMode.value)}” : fais d’abord le niveau Moyen (≥ ${SCORE_TO_UNLOCK}%).`, false);
     } else {
       updateExpertLockUI();
     }
