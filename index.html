@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Jeu 4e — Molécules : formule ↔ modèle + compter les atomes</title>
+  <title>Jeu 4e — Atomes & Molécules</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -30,7 +30,7 @@
       flex: 0 0 auto;
     }
 
-    .card{width:min(980px,100%);background:transparent;border-radius:18px;padding:10px 10px 14px;position:relative}
+    .card{width:min(1020px,100%);background:transparent;border-radius:18px;padding:10px 10px 14px;position:relative}
     .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 6px 8px;flex-wrap:wrap}
     .title{font-family:var(--fontTitle);font-size:clamp(18px,2.4vw,26px);color:var(--blue);font-weight:800;letter-spacing:.2px}
     .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
@@ -69,6 +69,7 @@
       font-size:clamp(18px,3.0vw,32px);font-weight:900;text-align:center;line-height:1.2;
       margin:6px 0 14px;text-shadow:0 2px 0 rgba(255,255,255,.9)
     }
+
     .center{display:flex;justify-content:center;align-items:center;min-height:190px;margin:6px 0 6px;gap:18px;flex-wrap:wrap}
 
     .methane{
@@ -138,8 +139,10 @@
     .ansBtn{
       border-radius:14px;border:1px solid rgba(0,0,0,.14);
       background:#fff;box-shadow:0 8px 16px rgba(0,0,0,.08);
-      padding:12px 12px;font-size:clamp(18px,2.2vw,26px);
+      padding:12px 12px;font-size:clamp(18px,2.0vw,24px);
       font-weight:900;cursor:pointer;text-align:center;
+      display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
+      min-height:72px;
     }
     .ansBtn.correct{outline:4px solid rgba(46,204,113,.35);border-color:rgba(46,204,113,.6)}
     .ansBtn.wrong{outline:4px solid rgba(231,76,60,.25);border-color:rgba(231,76,60,.55)}
@@ -198,7 +201,7 @@
 
   <div class="card">
     <div class="topbar">
-      <div class="title">Jeu — Molécules (4e)</div>
+      <div class="title">Jeu — Atomes & Molécules (4e)</div>
       <div class="controls">
         <label style="display:flex;align-items:center;gap:8px">
           Niveau :
@@ -213,8 +216,9 @@
           Mode :
           <select id="mode">
             <option value="mix" selected>Mixte</option>
-            <option value="formula">Formule de la molécule</option>
+            <option value="formulaToModel">Passer de la formule au modèle</option>
             <option value="count">Compter des atomes</option>
+            <option value="atomOrMolecule">Atome ou molécule ?</option>
           </select>
         </label>
 
@@ -231,8 +235,7 @@
       </div>
     </div>
 
-    <!-- Message verrou Expert -->
-    <div class="lockMsg" id="lockMessage">🔒 Le niveau expert se débloque après avoir <b>terminé</b> le niveau <b>Moyen</b> avec un score suffisant.</div>
+    <div class="lockMsg" id="lockMessage">🔒 Le niveau expert se débloque après avoir terminé le niveau Moyen avec un score suffisant.</div>
 
     <div class="stats">
       <div class="pill">Question : <b id="qnum">0</b>/<b id="qmaxDisp">10</b></div>
@@ -263,7 +266,7 @@
         <div class="acBody" id="autoCorrectBody"></div>
       </div>
 
-      <div class="tiny">Raccourcis : <b>Entrée</b> = vérifier (en mode “compter”), <b>→</b> = question suivante.</div>
+      <div class="tiny">Raccourcis : <b>Entrée</b> = vérifier (compter), <b>→</b> = question suivante.</div>
 
       <div class="nextBubble" id="nextBubble" title="Question suivante">
         <div class="triangle"></div>
@@ -274,45 +277,58 @@
 
 <script>
 (() => {
+  // ===== Atoms (including extra ones for "Atome ou molécule ?") =====
   const ATOMS = {
-    H: { name:"Hydrogène", color:"#ffffff", border:"rgba(0,0,0,.28)" },
-    O: { name:"Oxygène",   color:"#ff1e1e", border:"rgba(0,0,0,.22)" },
-    C: { name:"Carbone",   color:"#111111", border:"rgba(0,0,0,.22)" },
-    N: { name:"Azote",     color:"#2f66ff", border:"rgba(0,0,0,.22)" },
+    H:  { name:"Hydrogène", color:"#ffffff", border:"rgba(0,0,0,.28)" },
+    O:  { name:"Oxygène",   color:"#ff1e1e", border:"rgba(0,0,0,.22)" },
+    C:  { name:"Carbone",   color:"#111111", border:"rgba(0,0,0,.22)" },
+    N:  { name:"Azote",     color:"#2f66ff", border:"rgba(0,0,0,.22)" },
+
+    // only used in "Atome ou molécule ?"
+    Co: { name:"Cobalt",    color:"#7f8c8d", border:"rgba(0,0,0,.22)" },
+    Cl: { name:"Chlore",    color:"#2ecc71", border:"rgba(0,0,0,.22)" },
+    Ca: { name:"Calcium",   color:"#f39c12", border:"rgba(0,0,0,.22)" },
   };
 
+  // ===== Molecules =====
   const MOLECULES = [
-    { key:"H2O", name:"Eau",               html:"H<small>2</small>O", counts:{H:2,O:1} },
-    { key:"CO2", name:"Dioxyde de carbone",html:"CO<small>2</small>", counts:{C:1,O:2} },
-    { key:"O2",  name:"Dioxygène",         html:"O<small>2</small>",  counts:{O:2} },
-    { key:"H2",  name:"Dihydrogène",       html:"H<small>2</small>",  counts:{H:2} },
-    { key:"N2",  name:"Diazote",           html:"N<small>2</small>",  counts:{N:2} },
-    { key:"CH4", name:"Méthane",           html:"CH<small>4</small>", counts:{C:1,H:4} },
-    { key:"N2O", name:"Protoxyde d’azote", html:"N<small>2</small>O", counts:{N:2,O:1} },
+    { key:"H2O", name:"Eau",               html:"H<small>2</small>O", counts:{H:2,O:1}, atoms:["H","O","H"] },
+    { key:"CO2", name:"Dioxyde de carbone",html:"CO<small>2</small>", counts:{C:1,O:2}, atoms:["O","C","O"] },
+    { key:"O2",  name:"Dioxygène",         html:"O<small>2</small>",  counts:{O:2},     atoms:["O","O"] },
+    { key:"H2",  name:"Dihydrogène",       html:"H<small>2</small>",  counts:{H:2},     atoms:["H","H"] },
+    { key:"N2",  name:"Diazote",           html:"N<small>2</small>",  counts:{N:2},     atoms:["N","N"] },
+    { key:"CH4", name:"Méthane",           html:"CH<small>4</small>", counts:{C:1,H:4}, atoms:["CH4_SPECIAL"] },
+    { key:"N2O", name:"Protoxyde d’azote", html:"N<small>2</small>O", counts:{N:2,O:1}, atoms:["N","N","O"] },
+  ];
+
+  // only for "Atome ou molécule ?"
+  const EXTRA_MOLECULES_ATOM_OR_MOL = [
+    { key:"CO", name:"Monoxyde de carbone", html:"CO", counts:{C:1,O:1}, atoms:["C","O"] }
   ];
 
   // ===== Difficulty profiles =====
+  // (applies to formulaToModel and count; atomOrMolecule stays simple)
   const LEVELS = {
     beginner: {
-      formula: { multiProb: 0.25, multiTerms: [2,2], coefMin: 1, coefMax: 3 },
-      count:   { terms: [2,2], coefMin: 1, coefMax: 6 },
-      mix:     { formulaProb: 0.65 }
+      ftm:   { multiProb: 0.55, terms: [1,2], coefMin: 1, coefMax: 3, atomProb: 0.35 },
+      count: { terms: [2,2], coefMin: 1, coefMax: 8,  atomProb: 0.25 },
+      mix:   { ftmProb: 0.55, countProb: 0.35, aomProb: 0.10 }
     },
     medium: {
-      formula: { multiProb: 0.55, multiTerms: [2,3], coefMin: 1, coefMax: 5 },
-      count:   { terms: [2,3], coefMin: 1, coefMax: 20 },
-      mix:     { formulaProb: 0.55 }
+      ftm:   { multiProb: 0.75, terms: [2,3], coefMin: 1, coefMax: 6, atomProb: 0.40 },
+      count: { terms: [2,3], coefMin: 1, coefMax: 20, atomProb: 0.30 },
+      mix:   { ftmProb: 0.50, countProb: 0.40, aomProb: 0.10 }
     },
     expert: {
-      formula: { multiProb: 0.80, multiTerms: [3,4], coefMin: 1, coefMax: 8 },
-      count:   { terms: [3,4], coefMin: 5, coefMax: 50 },
-      mix:     { formulaProb: 0.45 }
+      ftm:   { multiProb: 0.85, terms: [3,4], coefMin: 1, coefMax: 10, atomProb: 0.45 },
+      count: { terms: [3,4], coefMin: 5, coefMax: 50, atomProb: 0.35 },
+      mix:   { ftmProb: 0.45, countProb: 0.45, aomProb: 0.10 }
     }
   };
 
   // ===== Lock / unlock Expert =====
   const EXPERT_UNLOCK_KEY = "expertUnlocked";
-  const SCORE_TO_UNLOCK = 70; // % minimum pour débloquer (change si tu veux : 80)
+  const SCORE_TO_UNLOCK = 70; // % minimum pour débloquer Expert
 
   const $ = (id) => document.getElementById(id);
   const elMode = $("mode");
@@ -353,9 +369,12 @@
     return a;
   };
   const pickOne = (arr) => arr[Math.floor(Math.random()*arr.length)];
-  const byKey = (k) => MOLECULES.find(m => m.key === k);
   const randInt = (min, max) => Math.floor(Math.random()*(max-min+1))+min;
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+  function byMolKey(k){
+    return [...MOLECULES, ...EXTRA_MOLECULES_ATOM_OR_MOL].find(m => m.key === k);
+  }
 
   function expertUnlocked(){
     return localStorage.getItem(EXPERT_UNLOCK_KEY) === "true";
@@ -374,14 +393,12 @@
       expertOpt.textContent = "🔒 Expert";
       elLockMessage.style.display = "block";
       elLockMessage.innerHTML = `🔒 Le niveau expert se débloque après avoir <b>terminé</b> le niveau <b>Moyen</b> avec au moins <b>${SCORE_TO_UNLOCK}%</b>.`;
-      // si jamais quelqu'un "force" expert (rare), on revient à Moyen
       if (elLevel.value === "expert") elLevel.value = "medium";
     }
   }
 
   function levelCfg(){
-    const lvl = elLevel.value;
-    return LEVELS[lvl] || LEVELS.medium;
+    return LEVELS[elLevel.value] || LEVELS.medium;
   }
 
   function setStats(){
@@ -429,7 +446,6 @@
     resetUI();
     elQuestion.textContent = `Terminé ! Score : ${score}/${qMax} (${pct}%)`;
 
-    // 🔓 Débloquage Expert si niveau Moyen + score suffisant
     if (playedLevel === "medium" && pct >= SCORE_TO_UNLOCK){
       if (!expertUnlocked()){
         localStorage.setItem(EXPERT_UNLOCK_KEY, "true");
@@ -444,15 +460,16 @@
     }
   }
 
+  // ===== Visual helpers =====
   function makeAtom(sym){
+    const data = ATOMS[sym];
     const a = document.createElement("div");
     a.className = "atom";
-    a.style.background = ATOMS[sym].color;
-    a.style.borderColor = ATOMS[sym].border;
+    a.style.background = data ? data.color : "#ddd";
+    a.style.borderColor = data ? data.border : "rgba(0,0,0,.22)";
     return a;
   }
 
-  // Rotation helpers
   function randBetween(min, max){ return min + Math.random() * (max - min); }
   function rotationRangeForSize(size){
     if (size === "big") return 10;
@@ -481,8 +498,8 @@
     return wrap;
   }
 
-  function renderMolModel(key, size){
-    const m = byKey(key);
+  function renderMolModel(molKey, size){
+    const m = byMolKey(molKey);
 
     if (m.key === "CH4"){
       const div = document.createElement("div");
@@ -491,57 +508,84 @@
       return wrapRotated(div, size);
     }
 
-    const atomsMap = {
-      H2O: ["H","O","H"],
-      CO2: ["O","C","O"],
-      O2:  ["O","O"],
-      H2:  ["H","H"],
-      N2:  ["N","N"],
-      N2O: ["N","N","O"]
-    };
-    const atoms = atomsMap[m.key];
-
+    const atoms = m.atoms;
     const row = document.createElement("div");
     row.className = "molModel " + size;
     row.style.display = "flex";
     row.style.alignItems = "center";
     row.style.gap = "0px";
-    atoms.forEach(sym => row.appendChild(makeAtom(sym)));
 
+    atoms.forEach(sym => row.appendChild(makeAtom(sym)));
     return wrapRotated(row, size);
   }
 
-  function chooseRepeatSize(totalMolecules){
-    if (totalMolecules >= 10) return "mini";
-    if (totalMolecules >= 6) return "small";
+  function renderAtomModel(sym, size){
+    const row = document.createElement("div");
+    row.className = "molModel " + size;
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "0px";
+    row.appendChild(makeAtom(sym));
+    return wrapRotated(row, size);
+  }
+
+  function chooseRepeatSize(totalUnits){
+    if (totalUnits >= 10) return "mini";
+    if (totalUnits >= 6) return "small";
     return "small";
   }
 
-  // Grammar helpers
+  // ===== Language helpers =====
   function deOrD(sym){
     const map = { H: "d’hydrogène", O: "d’oxygène", N: "d’azote", C: "de carbone" };
     return map[sym] || ("de " + sym);
   }
 
-  // Hide "1" before formulas when coef === 1
-  function formatExpressionHTML(exprTerms){
-    return exprTerms.map((t, i) => {
-      const coef = (t.coef === 1) ? "" : `<span class="coef">${t.coef}</span>`;
-      const space = (t.coef === 1) ? "" : " ";
-      const f = `<span class="formula">${byKey(t.key).html}</span>`;
-      const plus = (i < exprTerms.length-1) ? `<span class="plus"> + </span>` : "";
-      return `${coef}${space}${f}${plus}`;
+  // ===== Term structure =====
+  // term = { kind:"atom", sym:"H", coef:2 } OR { kind:"molecule", key:"H2O", coef:3 }
+  const BASE_ATOMS_FOR_MAIN_MODES = ["H","O","C","N"];
+
+  function termToHTML(t){
+    const coef = (t.coef === 1) ? "" : `<span class="coef">${t.coef}</span>`;
+    const space = (t.coef === 1) ? "" : " ";
+    const body = (t.kind === "atom")
+      ? `<span class="formula">${t.sym}</span>`
+      : `<span class="formula">${byMolKey(t.key).html}</span>`;
+    return `${coef}${space}${body}`;
+  }
+
+  function formatExpressionHTML(terms){
+    return terms.map((t, i) => {
+      const plus = (i < terms.length-1) ? `<span class="plus"> + </span>` : "";
+      return termToHTML(t) + plus;
     }).join("");
   }
 
-  function renderMultiModels(exprTerms){
+  function formatTermForEquation(t){
+    const term = document.createElement("span");
+    term.className = "term";
+    if (t.coef !== 1){
+      const c = document.createElement("span");
+      c.className = "coef";
+      c.textContent = String(t.coef);
+      term.appendChild(c);
+    }
+    const f = document.createElement("span");
+    f.className = "formula";
+    if (t.kind === "atom") f.textContent = t.sym;
+    else f.innerHTML = byMolKey(t.key).html;
+    term.appendChild(f);
+    return term;
+  }
+
+  function renderMultiModels(terms){
     const wrap = document.createElement("div");
     wrap.className = "group";
 
-    const totalMolecules = exprTerms.reduce((s,t)=>s+t.coef,0);
-    const size = chooseRepeatSize(totalMolecules);
+    const totalUnits = terms.reduce((s,t)=>s+t.coef,0);
+    const size = chooseRepeatSize(totalUnits);
 
-    exprTerms.forEach((t, i) => {
+    terms.forEach((t, i) => {
       const item = document.createElement("div");
       item.className = "molItem";
 
@@ -551,14 +595,15 @@
       for (let n = 0; n < t.coef; n++){
         const clone = document.createElement("div");
         clone.className = "molClone";
-        clone.appendChild(renderMolModel(t.key, size));
+        if (t.kind === "atom") clone.appendChild(renderAtomModel(t.sym, size));
+        else clone.appendChild(renderMolModel(t.key, size));
         stack.appendChild(clone);
       }
 
       item.appendChild(stack);
       wrap.appendChild(item);
 
-      if (i < exprTerms.length - 1){
+      if (i < terms.length - 1){
         const plus = document.createElement("div");
         plus.className = "plusSign";
         plus.textContent = "+";
@@ -569,247 +614,224 @@
     return wrap;
   }
 
-  // ===== Question type selection (uses difficulty) =====
+  // ===== Question selection =====
   function pickQuestionType(){
     const mode = elMode.value;
-    const cfg = levelCfg();
-    if (mode === "formula") return "formula";
+    const cfg = levelCfg().mix;
+
+    if (mode === "formulaToModel") return "formulaToModel";
     if (mode === "count") return "count";
-    return Math.random() < cfg.mix.formulaProb ? "formula" : "count";
+    if (mode === "atomOrMolecule") return "atomOrMolecule";
+
+    // mixte: pondération
+    const r = Math.random();
+    if (r < cfg.ftmProb) return "formulaToModel";
+    if (r < cfg.ftmProb + cfg.countProb) return "count";
+    return "atomOrMolecule";
   }
 
-  // ===== Formula questions =====
-  function buildFormulaSingle(){
-    const keys = MOLECULES.map(m => m.key);
-    const correctKey = pickOne(keys);
+  // ===== Mode: Passer de la formule au modèle =====
+  function buildFormulaToModel(){
+    const cfg = levelCfg().ftm;
 
-    const choices = shuffle([correctKey, ...shuffle(keys.filter(k => k !== correctKey)).slice(0,3)]);
-    current = { type:"formulaSingle", correctKey, choices };
+    const nTerms = randInt(cfg.terms[0], cfg.terms[1]);
+    const makeTerm = () => {
+      const isAtom = Math.random() < cfg.atomProb;
+      if (isAtom){
+        return { kind:"atom", sym: pickOne(BASE_ATOMS_FOR_MAIN_MODES), coef: randInt(cfg.coefMin, cfg.coefMax) };
+      }
+      const mol = pickOne(MOLECULES);
+      return { kind:"molecule", key: mol.key, coef: randInt(cfg.coefMin, cfg.coefMax) };
+    };
 
-    elQuestion.textContent = "Quelle est la formule de cette molécule ?";
-    elCenter.appendChild(renderMolModel(correctKey, "big"));
-
-    elAnswers.style.display = "grid";
-    elAnswers.innerHTML = "";
-    choices.forEach((k) => {
-      const btn = document.createElement("button");
-      btn.className = "ansBtn";
-      btn.innerHTML = byKey(k).html;
-      btn.addEventListener("click", () => answerFormulaSingle(k, btn));
-      elAnswers.appendChild(btn);
-    });
-
-    setFeedback("Clique sur la bonne formule.", true);
-  }
-
-  function answerFormulaSingle(choiceKey, btn){
-    if (!running || locked) return;
-    locked = true;
-
-    const correctKey = current.correctKey;
-    [...elAnswers.querySelectorAll(".ansBtn")].forEach(b => {
-      if (b.innerHTML === byKey(correctKey).html) b.classList.add("correct");
-    });
-
-    if (choiceKey === correctKey){
-      score += 1; streak += 1;
-      btn.classList.add("correct");
-      setFeedback("Bravo ! Bonne réponse ✅", true);
-    } else {
-      streak = 0;
-      btn.classList.add("wrong");
-      setFeedback("Non ❌ Regarde la correction juste en dessous.", false);
-
-      const mol = byKey(correctKey);
-      showCorrection(
-        `✅ <b>Réponse :</b> ${mol.html}<br>
-         <small>Astuce : compte les boules (couleurs) : H (blanc), O (rouge), C (noir), N (bleu).</small>`
-      );
-    }
-    setStats();
-  }
-
-  function buildFormulaMulti(){
-    const cfg = levelCfg().formula;
-
-    const minT = cfg.multiTerms[0], maxT = cfg.multiTerms[1];
-    const n = randInt(minT, maxT);
-
-    const selected = shuffle(MOLECULES).slice(0, clamp(n, 2, MOLECULES.length));
-
-    const terms = selected.map(m => ({
-      coef: randInt(cfg.coefMin, cfg.coefMax),
-      key: m.key
-    }));
-
-    const correctHTML = formatExpressionHTML(terms);
-
-    const distractors = [];
-    const used = new Set([correctHTML]);
-
-    function pushIfNew(expr){
-      const html = formatExpressionHTML(expr);
-      if (!used.has(html)){
-        used.add(html);
-        distractors.push({ html, expr });
+    // build correct terms (avoid duplicates too much)
+    const terms = [];
+    const used = new Set();
+    while (terms.length < nTerms){
+      const t = makeTerm();
+      const id = (t.kind==="atom" ? "A:"+t.sym : "M:"+t.key);
+      if (!used.has(id) || terms.length === 0){
+        used.add(id);
+        terms.push(t);
       }
     }
 
-    // distractor 1: tweak one coefficient
-    {
-      const expr = terms.map(t => ({...t}));
-      const i = randInt(0, expr.length-1);
-      expr[i].coef = clamp(expr[i].coef + (Math.random()<0.5 ? 1 : -1), 1, cfg.coefMax);
-      pushIfNew(expr);
-    }
-    // distractor 2: replace one molecule
-    {
-      const expr = terms.map(t => ({...t}));
-      const i = randInt(0, expr.length-1);
-      const other = pickOne(MOLECULES.filter(m => !expr.some(t => t.key === m.key)));
-      if (other) expr[i].key = other.key;
-      pushIfNew(expr);
-    }
-    // distractor 3: randomize one coefficient
-    {
-      const expr = terms.map(t => ({...t}));
-      const i = randInt(0, expr.length-1);
-      expr[i].coef = randInt(cfg.coefMin, cfg.coefMax);
-      pushIfNew(expr);
+    // sometimes force multi
+    if (terms.length === 1 && Math.random() < cfg.multiProb){
+      const extra = makeTerm();
+      terms.push(extra);
     }
 
-    while (distractors.length < 3){
-      const expr = terms.map(t => ({...t}));
-      const i = randInt(0, expr.length-1);
-      expr[i].coef = randInt(cfg.coefMin, cfg.coefMax);
-      pushIfNew(expr);
-      if (used.size > 60) break;
+    const correctExprHTML = formatExpressionHTML(terms);
+    current = { type:"formulaToModel", terms, correctExprHTML };
+
+    elQuestion.textContent = "Choisis la modélisation qui correspond à cette formule :";
+    elEqBox.style.display = "flex";
+    elEquation.innerHTML = correctExprHTML;
+
+    // Build 3 distractor model options by modifying terms
+    const options = [];
+    const usedOpt = new Set();
+
+    function pushOption(termsOpt){
+      const key = JSON.stringify(termsOpt.map(t => ({
+        k:t.kind, s:t.sym||"", m:t.key||"", c:t.coef
+      })));
+      if (usedOpt.has(key)) return false;
+      usedOpt.add(key);
+      options.push(termsOpt);
+      return true;
     }
 
-    const options = shuffle([{ html: correctHTML, expr: terms }, ...distractors.slice(0,3)]);
-    current = { type:"formulaMulti", correctHTML, terms, options };
+    pushOption(terms);
 
-    elQuestion.textContent = "Quelle expression correspond à ce que tu vois ?";
-    elCenter.appendChild(renderMultiModels(terms));
+    // Distractor: tweak coefficient
+    {
+      const t = terms.map(x => ({...x}));
+      const i = randInt(0, t.length-1);
+      t[i].coef = clamp(t[i].coef + (Math.random()<0.5 ? 1 : -1), 1, cfg.coefMax);
+      pushOption(t);
+    }
+    // Distractor: swap one term (atom or molecule)
+    {
+      const t = terms.map(x => ({...x}));
+      const i = randInt(0, t.length-1);
+      if (t[i].kind === "atom"){
+        const other = pickOne(BASE_ATOMS_FOR_MAIN_MODES.filter(a => a !== t[i].sym));
+        t[i].sym = other;
+      } else {
+        const otherMol = pickOne(MOLECULES.filter(m => m.key !== t[i].key));
+        t[i].key = otherMol.key;
+      }
+      pushOption(t);
+    }
+    // Distractor: change kind of a term (atom <-> molecule) sometimes
+    {
+      const t = terms.map(x => ({...x}));
+      const i = randInt(0, t.length-1);
+      if (t[i].kind === "atom"){
+        const otherMol = pickOne(MOLECULES);
+        t[i] = { kind:"molecule", key: otherMol.key, coef: clamp(t[i].coef, 1, cfg.coefMax) };
+      } else {
+        const otherA = pickOne(BASE_ATOMS_FOR_MAIN_MODES);
+        t[i] = { kind:"atom", sym: otherA, coef: clamp(t[i].coef, 1, cfg.coefMax) };
+      }
+      pushOption(t);
+    }
+
+    // Ensure 4 options
+    while (options.length < 4){
+      const t = terms.map(x => ({...x}));
+      const i = randInt(0, t.length-1);
+      t[i].coef = randInt(1, cfg.coefMax);
+      pushOption(t);
+      if (usedOpt.size > 50) break;
+    }
+
+    const shuffled = shuffle(options).slice(0,4);
+    current.options = shuffled;
 
     elAnswers.style.display = "grid";
     elAnswers.innerHTML = "";
-    options.forEach((opt) => {
+    shuffled.forEach((termsOpt) => {
       const btn = document.createElement("button");
       btn.className = "ansBtn";
-      btn.innerHTML = opt.html;
-      btn.addEventListener("click", () => answerFormulaMulti(opt, btn));
+      btn.appendChild(renderMultiModels(termsOpt));
+      btn.addEventListener("click", () => answerFormulaToModel(termsOpt, btn));
       elAnswers.appendChild(btn);
     });
 
-    setFeedback("Choisis la bonne écriture (coefficients + formules).", true);
+    setFeedback("Lis la formule, puis choisis le bon “paquet” de modèles.", true);
   }
 
-  function buildFormulaQuestion(){
-    const cfg = levelCfg().formula;
-    const isMulti = Math.random() < cfg.multiProb;
-    if (isMulti) buildFormulaMulti();
-    else buildFormulaSingle();
+  function sameTerms(a, b){
+    if (a.length !== b.length) return false;
+    for (let i=0;i<a.length;i++){
+      const x=a[i], y=b[i];
+      if (x.kind!==y.kind) return false;
+      if (x.coef!==y.coef) return false;
+      if (x.kind==="atom" && x.sym!==y.sym) return false;
+      if (x.kind==="molecule" && x.key!==y.key) return false;
+    }
+    return true;
   }
 
-  function answerFormulaMulti(opt, btn){
+  function answerFormulaToModel(termsChoice, btn){
     if (!running || locked) return;
     locked = true;
 
+    // mark correct option
     [...elAnswers.querySelectorAll(".ansBtn")].forEach(b => {
-      if (b.innerHTML === current.correctHTML) b.classList.add("correct");
+      // we cannot easily compare DOM; compare by index against current.options
+      // apply correct class to the button that matches correct terms
+      // (we compare to current.terms)
+      const idx = [...elAnswers.children].indexOf(b);
+      const optTerms = current.options[idx];
+      if (sameTerms(optTerms, current.terms)) b.classList.add("correct");
     });
 
-    if (opt.html === current.correctHTML){
+    if (sameTerms(termsChoice, current.terms)){
       score += 1; streak += 1;
       btn.classList.add("correct");
-      setFeedback("Bravo ! Bonne réponse ✅", true);
+      setFeedback("Bravo ✅ C’est la bonne modélisation.", true);
     } else {
       streak = 0;
       btn.classList.add("wrong");
       setFeedback("Non ❌ Regarde la correction juste en dessous.", false);
 
-      const lines = current.terms.map(t => {
-        const name = byKey(t.key).name;
-        return `• <b>${t.coef}</b> molécule(s) de <b>${name}</b> → ${t.coef === 1 ? "" : t.coef + " "}${byKey(t.key).html}`;
-      }).join("<br>");
-
       showCorrection(
-        `✅ <b>Réponse :</b> ${current.correctHTML}<br><br>
-         <b>Comment se corriger :</b><br>
-         ${lines}<br><br>
-         <small>Astuce : le nombre devant la formule = “combien de molécules”. S’il vaut 1, on ne l’écrit pas.</small>`
+        `✅ <b>Formule correcte :</b> ${current.correctExprHTML}<br><br>
+         <small>Astuce : le nombre devant (ex : 2H) indique combien de fois on répète l’atome ou la molécule.</small>`
       );
     }
     setStats();
   }
 
-  // ===== Counting questions =====
-  // Hide "1" coefficient in the blue equation panel
-  function formatTerm(coef, mol){
-    const term = document.createElement("span");
-    term.className = "term";
-
-    if (coef !== 1){
-      const c = document.createElement("span");
-      c.className = "coef";
-      c.textContent = String(coef);
-      term.appendChild(c);
-    }
-
-    const f = document.createElement("span");
-    f.className = "formula";
-    f.innerHTML = mol.html;
-    term.appendChild(f);
-
-    return term;
-  }
-
-  function countAtomsInExpression(terms, element){
-    let total = 0;
-    for (const t of terms){
-      const m = byKey(t.moleculeKey);
-      const perMol = (m.counts[element] || 0);
-      total += t.coef * perMol;
-    }
-    return total;
-  }
-
+  // ===== Mode: Compter des atomes (avec atomes isolés) =====
   function buildCountQuestion(){
     const cfg = levelCfg().count;
 
     const nTerms = randInt(cfg.terms[0], cfg.terms[1]);
-    const mols = shuffle(MOLECULES).slice(0, clamp(nTerms, 2, MOLECULES.length));
+    const terms = [];
+    const used = new Set();
 
-    const terms = mols.map(m => ({
-      coef: randInt(cfg.coefMin, cfg.coefMax),
-      moleculeKey: m.key
-    }));
-
-    const presentElements = new Set();
-    for (const t of terms){
-      const cts = byKey(t.moleculeKey).counts;
-      Object.keys(cts).forEach(e => presentElements.add(e));
-    }
-
-    let element;
-    if (elLevel.value === "expert" && Math.random() < 0.35){
-      const elems = [...presentElements];
-      const countsByElem = new Map();
-      elems.forEach(e => countsByElem.set(e, 0));
-      for (const t of terms){
-        const cts = byKey(t.moleculeKey).counts;
-        for (const e of elems){
-          if ((cts[e] || 0) > 0) countsByElem.set(e, countsByElem.get(e)+1);
-        }
+    function makeTerm(){
+      const isAtom = Math.random() < cfg.atomProb;
+      if (isAtom){
+        return { kind:"atom", sym: pickOne(BASE_ATOMS_FOR_MAIN_MODES), coef: randInt(cfg.coefMin, cfg.coefMax) };
       }
-      const rare = elems.filter(e => countsByElem.get(e) === 1);
-      element = rare.length ? pickOne(rare) : pickOne(elems);
-    } else {
-      element = pickOne([...presentElements]);
+      const mol = pickOne(MOLECULES);
+      return { kind:"molecule", key: mol.key, coef: randInt(cfg.coefMin, cfg.coefMax) };
     }
 
-    const correct = countAtomsInExpression(terms, element);
+    while (terms.length < nTerms){
+      const t = makeTerm();
+      const id = (t.kind==="atom" ? "A:"+t.sym : "M:"+t.key);
+      if (!used.has(id) || terms.length === 0){
+        used.add(id);
+        terms.push(t);
+      }
+    }
+
+    // pick an element that exists somewhere in the expression
+    const present = new Set();
+    for (const t of terms){
+      if (t.kind === "atom") present.add(t.sym);
+      else Object.keys(byMolKey(t.key).counts).forEach(e => present.add(e));
+    }
+    const element = pickOne([...present]);
+
+    // compute correct
+    let correct = 0;
+    for (const t of terms){
+      if (t.kind === "atom"){
+        correct += (t.sym === element ? t.coef * 1 : 0);
+      } else {
+        const m = byMolKey(t.key);
+        correct += t.coef * (m.counts[element] || 0);
+      }
+    }
+
     current = { type:"count", terms, element, correct };
 
     elQuestion.textContent = `Combien y a-t-il d'atomes ${deOrD(element)} ?`;
@@ -818,7 +840,7 @@
     elEquation.innerHTML = "";
 
     terms.forEach((t, i) => {
-      elEquation.appendChild(formatTerm(t.coef, byKey(t.moleculeKey)));
+      elEquation.appendChild(formatTermForEquation(t));
       if (i < terms.length - 1){
         const plus = document.createElement("span");
         plus.className = "plus";
@@ -854,9 +876,14 @@
       setFeedback("Non ❌ Regarde la correction juste en dessous.", false);
 
       const steps = current.terms.map(t => {
-        const mol = byKey(t.moleculeKey);
-        const perMol = mol.counts[current.element] || 0;
-        return `• ${t.coef} × (${perMol} atome(s) ${deOrD(current.element)} dans ${mol.html}) = <b>${t.coef*perMol}</b>`;
+        if (t.kind === "atom"){
+          const per = (t.sym === current.element) ? 1 : 0;
+          return `• ${t.coef} × (${per} atome ${deOrD(current.element)} dans ${t.sym}) = <b>${t.coef*per}</b>`;
+        } else {
+          const mol = byMolKey(t.key);
+          const perMol = mol.counts[current.element] || 0;
+          return `• ${t.coef} × (${perMol} atome(s) ${deOrD(current.element)} dans ${mol.html}) = <b>${t.coef*perMol}</b>`;
+        }
       }).join("<br>");
 
       showCorrection(
@@ -865,6 +892,89 @@
          ${steps}<br>
          <b>Total</b> = ${current.correct}`
       );
+    }
+    setStats();
+  }
+
+  // ===== Mode: Atome ou molécule ? =====
+  function buildAtomOrMolecule(){
+    // pool for this mode includes extra atoms and CO molecule
+    const atomPool = ["H","O","C","N","Co","Cl","Ca"];
+    const molPool = [...MOLECULES.map(m=>m.key), ...EXTRA_MOLECULES_ATOM_OR_MOL.map(m=>m.key)];
+
+    const isAtom = Math.random() < 0.5;
+    const showAsModel = Math.random() < 0.55; // model or formula
+
+    let item;
+    if (isAtom){
+      item = { kind:"atom", sym: pickOne(atomPool) };
+    } else {
+      item = { kind:"molecule", key: pickOne(molPool) };
+    }
+
+    current = { type:"atomOrMolecule", correct: isAtom ? "atom" : "molecule", item };
+
+    elQuestion.textContent = "Atome ou molécule ?";
+
+    // Show prompt in center (either model or formula)
+    if (showAsModel){
+      elCenter.appendChild(
+        item.kind === "atom"
+          ? renderAtomModel(item.sym, "big")
+          : renderMolModel(item.key, "big")
+      );
+      elEqBox.style.display = "none";
+    } else {
+      elEqBox.style.display = "flex";
+      elEquation.innerHTML = (item.kind === "atom")
+        ? `<span class="formula">${item.sym}</span>`
+        : `<span class="formula">${byMolKey(item.key).html}</span>`;
+    }
+
+    // Two buttons
+    elAnswers.style.display = "grid";
+    elAnswers.innerHTML = "";
+
+    const btnAtom = document.createElement("button");
+    btnAtom.className = "ansBtn";
+    btnAtom.textContent = "Atome";
+    btnAtom.addEventListener("click", () => answerAtomOrMolecule("atom", btnAtom));
+
+    const btnMol = document.createElement("button");
+    btnMol.className = "ansBtn";
+    btnMol.textContent = "Molécule";
+    btnMol.addEventListener("click", () => answerAtomOrMolecule("molecule", btnMol));
+
+    elAnswers.appendChild(btnAtom);
+    elAnswers.appendChild(btnMol);
+
+    setFeedback("Choisis : atome (1 seule boule) ou molécule (plusieurs boules).", true);
+  }
+
+  function answerAtomOrMolecule(choice, btn){
+    if (!running || locked) return;
+    locked = true;
+
+    // highlight correct
+    [...elAnswers.querySelectorAll(".ansBtn")].forEach(b => {
+      if (b.textContent.toLowerCase() === current.correct) b.classList.add("correct");
+    });
+
+    if (choice === current.correct){
+      score += 1; streak += 1;
+      btn.classList.add("correct");
+      setFeedback("Bravo ✅", true);
+    } else {
+      streak = 0;
+      btn.classList.add("wrong");
+      setFeedback("Non ❌ Regarde la correction juste en dessous.", false);
+
+      const label = current.correct === "atom" ? "Atome" : "Molécule";
+      const why = current.correct === "atom"
+        ? "Un atome est représenté par <b>une seule boule</b> (ou un seul symbole)."
+        : "Une molécule est un assemblage de <b>plusieurs atomes</b> (ou une formule comme H₂O, CO…).";
+
+      showCorrection(`✅ <b>Réponse :</b> ${label}<br>${why}`);
     }
     setStats();
   }
@@ -879,14 +989,14 @@
     resetUI();
 
     const type = pickQuestionType();
-    if (type === "formula") buildFormulaQuestion();
-    else buildCountQuestion();
+    if (type === "formulaToModel") buildFormulaToModel();
+    else if (type === "count") buildCountQuestion();
+    else buildAtomOrMolecule();
 
     setStats();
   }
 
   function startGame(){
-    // s'assure que l'UI correspond bien à l'état verrou/déverrou
     updateExpertLockUI();
 
     qMax = Number(elQmax.value);
@@ -897,7 +1007,7 @@
     nextQuestion();
   }
 
-  // Decorative background
+  // ===== Decorative background =====
   function buildBackground(){
     const bg = document.getElementById("bgmols");
     const samples = ["H2O","CO2","O2","H2","N2","CH4","N2O"];
@@ -926,7 +1036,6 @@
   elNextBubble.addEventListener("click", nextQuestion);
   elCheck.addEventListener("click", checkCountAnswer);
 
-  // si l'élève tente de choisir expert alors que c'est verrouillé
   elLevel.addEventListener("change", () => {
     if (elLevel.value === "expert" && !expertUnlocked()){
       elLevel.value = "medium";
