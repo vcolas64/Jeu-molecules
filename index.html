@@ -106,6 +106,15 @@
     }
     .molStack{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:100%}
     .molClone{display:flex;align-items:center;justify-content:center}
+    /* ✅ séparation plus marquée entre atomes isolés (quand on affiche plusieurs atomes) */
+    .molClone.atomClone{
+      padding:6px;
+      border-radius:16px;
+      background: rgba(255,255,255,.65);
+      border: 1px dashed rgba(0,0,0,.16);
+      box-shadow: 0 6px 12px rgba(0,0,0,.06);
+      margin: 2px 6px;
+    }
 
     .molModel{display:flex;align-items:center;gap:0}
     .molModel.big .atom{width:56px;height:56px}
@@ -185,6 +194,7 @@
       border:2px solid rgba(0,0,0,.18);
       box-shadow:0 10px 18px rgba(0,0,0,.18);
       display:grid;place-items:center;cursor:pointer;user-select:none;
+      z-index: 3;
     }
     .nextBubble:active{transform:scale(.98)}
     .triangle{
@@ -192,6 +202,28 @@
       border-left:16px solid rgba(0,0,0,.55);margin-left:3px;
     }
     .tiny{color:rgba(0,0,0,.62);font-size:12px;text-align:center;margin-top:10px}
+
+    /* ✅ Note RGPD en bas à gauche */
+    .rgpdNote{
+      position:absolute;
+      left:12px;
+      bottom:12px;
+      max-width: 420px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid rgba(0,0,0,.12);
+      background: rgba(255,255,255,.85);
+      box-shadow:0 6px 14px rgba(0,0,0,.08);
+      font-size:12px;
+      color:rgba(0,0,0,.70);
+      font-weight:800;
+      line-height:1.25;
+      z-index: 2;
+      user-select:none;
+    }
+    @media (max-width:700px){
+      .rgpdNote{max-width: 260px;font-size:11px;}
+    }
   </style>
 </head>
 
@@ -271,6 +303,11 @@
       <div class="nextBubble" id="nextBubble" title="Question suivante">
         <div class="triangle"></div>
       </div>
+
+      <!-- ✅ Message RGPD -->
+      <div class="rgpdNote" title="Information RGPD">
+        Ce jeu ne collecte aucune donnée personnelle et ne nécessite aucune inscription
+      </div>
     </div>
   </div>
 </div>
@@ -307,21 +344,24 @@
   ];
 
   // ===== Difficulty profiles =====
-  // (applies to formulaToModel and count; atomOrMolecule stays simple)
+  // ✅ Limite de coefficient :
+  //    - Débutant : 3
+  //    - Moyen    : 10
+  //    - Expert   : 20
   const LEVELS = {
     beginner: {
-      ftm:   { multiProb: 0.55, terms: [1,2], coefMin: 1, coefMax: 3, atomProb: 0.35 },
-      count: { terms: [2,2], coefMin: 1, coefMax: 8,  atomProb: 0.25 },
+      ftm:   { multiProb: 0.55, terms: [1,2], coefMin: 1, coefMax: 3,  atomProb: 0.35 },
+      count: { terms: [2,2], coefMin: 1, coefMax: 3,  atomProb: 0.25 },
       mix:   { ftmProb: 0.55, countProb: 0.35, aomProb: 0.10 }
     },
     medium: {
-      ftm:   { multiProb: 0.75, terms: [2,3], coefMin: 1, coefMax: 6, atomProb: 0.40 },
-      count: { terms: [2,3], coefMin: 1, coefMax: 20, atomProb: 0.30 },
+      ftm:   { multiProb: 0.75, terms: [2,3], coefMin: 1, coefMax: 10, atomProb: 0.40 },
+      count: { terms: [2,3], coefMin: 1, coefMax: 10, atomProb: 0.30 },
       mix:   { ftmProb: 0.50, countProb: 0.40, aomProb: 0.10 }
     },
     expert: {
-      ftm:   { multiProb: 0.85, terms: [3,4], coefMin: 1, coefMax: 10, atomProb: 0.45 },
-      count: { terms: [3,4], coefMin: 5, coefMax: 50, atomProb: 0.35 },
+      ftm:   { multiProb: 0.85, terms: [3,4], coefMin: 1, coefMax: 20, atomProb: 0.45 },
+      count: { terms: [3,4], coefMin: 5, coefMax: 20, atomProb: 0.35 },
       mix:   { ftmProb: 0.45, countProb: 0.45, aomProb: 0.10 }
     }
   };
@@ -594,7 +634,7 @@
 
       for (let n = 0; n < t.coef; n++){
         const clone = document.createElement("div");
-        clone.className = "molClone";
+        clone.className = "molClone" + (t.kind === "atom" ? " atomClone" : "");
         if (t.kind === "atom") clone.appendChild(renderAtomModel(t.sym, size));
         else clone.appendChild(renderMolModel(t.key, size));
         stack.appendChild(clone);
@@ -623,7 +663,6 @@
     if (mode === "count") return "count";
     if (mode === "atomOrMolecule") return "atomOrMolecule";
 
-    // mixte: pondération
     const r = Math.random();
     if (r < cfg.ftmProb) return "formulaToModel";
     if (r < cfg.ftmProb + cfg.countProb) return "count";
@@ -644,7 +683,6 @@
       return { kind:"molecule", key: mol.key, coef: randInt(cfg.coefMin, cfg.coefMax) };
     };
 
-    // build correct terms (avoid duplicates too much)
     const terms = [];
     const used = new Set();
     while (terms.length < nTerms){
@@ -656,7 +694,6 @@
       }
     }
 
-    // sometimes force multi
     if (terms.length === 1 && Math.random() < cfg.multiProb){
       const extra = makeTerm();
       terms.push(extra);
@@ -669,7 +706,6 @@
     elEqBox.style.display = "flex";
     elEquation.innerHTML = correctExprHTML;
 
-    // Build 3 distractor model options by modifying terms
     const options = [];
     const usedOpt = new Set();
 
@@ -685,14 +721,12 @@
 
     pushOption(terms);
 
-    // Distractor: tweak coefficient
     {
       const t = terms.map(x => ({...x}));
       const i = randInt(0, t.length-1);
       t[i].coef = clamp(t[i].coef + (Math.random()<0.5 ? 1 : -1), 1, cfg.coefMax);
       pushOption(t);
     }
-    // Distractor: swap one term (atom or molecule)
     {
       const t = terms.map(x => ({...x}));
       const i = randInt(0, t.length-1);
@@ -705,7 +739,6 @@
       }
       pushOption(t);
     }
-    // Distractor: change kind of a term (atom <-> molecule) sometimes
     {
       const t = terms.map(x => ({...x}));
       const i = randInt(0, t.length-1);
@@ -719,7 +752,6 @@
       pushOption(t);
     }
 
-    // Ensure 4 options
     while (options.length < 4){
       const t = terms.map(x => ({...x}));
       const i = randInt(0, t.length-1);
@@ -760,11 +792,7 @@
     if (!running || locked) return;
     locked = true;
 
-    // mark correct option
     [...elAnswers.querySelectorAll(".ansBtn")].forEach(b => {
-      // we cannot easily compare DOM; compare by index against current.options
-      // apply correct class to the button that matches correct terms
-      // (we compare to current.terms)
       const idx = [...elAnswers.children].indexOf(b);
       const optTerms = current.options[idx];
       if (sameTerms(optTerms, current.terms)) b.classList.add("correct");
@@ -813,7 +841,6 @@
       }
     }
 
-    // pick an element that exists somewhere in the expression
     const present = new Set();
     for (const t of terms){
       if (t.kind === "atom") present.add(t.sym);
@@ -821,11 +848,10 @@
     }
     const element = pickOne([...present]);
 
-    // compute correct
     let correct = 0;
     for (const t of terms){
       if (t.kind === "atom"){
-        correct += (t.sym === element ? t.coef * 1 : 0);
+        correct += (t.sym === element ? t.coef : 0);
       } else {
         const m = byMolKey(t.key);
         correct += t.coef * (m.counts[element] || 0);
@@ -898,12 +924,11 @@
 
   // ===== Mode: Atome ou molécule ? =====
   function buildAtomOrMolecule(){
-    // pool for this mode includes extra atoms and CO molecule
     const atomPool = ["H","O","C","N","Co","Cl","Ca"];
     const molPool = [...MOLECULES.map(m=>m.key), ...EXTRA_MOLECULES_ATOM_OR_MOL.map(m=>m.key)];
 
     const isAtom = Math.random() < 0.5;
-    const showAsModel = Math.random() < 0.55; // model or formula
+    const showAsModel = Math.random() < 0.55;
 
     let item;
     if (isAtom){
@@ -916,7 +941,6 @@
 
     elQuestion.textContent = "Atome ou molécule ?";
 
-    // Show prompt in center (either model or formula)
     if (showAsModel){
       elCenter.appendChild(
         item.kind === "atom"
@@ -931,7 +955,6 @@
         : `<span class="formula">${byMolKey(item.key).html}</span>`;
     }
 
-    // Two buttons
     elAnswers.style.display = "grid";
     elAnswers.innerHTML = "";
 
@@ -955,7 +978,6 @@
     if (!running || locked) return;
     locked = true;
 
-    // highlight correct
     [...elAnswers.querySelectorAll(".ansBtn")].forEach(b => {
       if (b.textContent.toLowerCase() === current.correct) b.classList.add("correct");
     });
