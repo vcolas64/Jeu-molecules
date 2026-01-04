@@ -31,8 +31,18 @@
     }
 
     .card{width:min(1020px,100%);background:transparent;border-radius:18px;padding:10px 10px 14px;position:relative}
-    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 6px 8px;flex-wrap:wrap}
-    .title{font-family:var(--fontTitle);font-size:clamp(18px,2.4vw,26px);color:var(--blue);font-weight:800;letter-spacing:.2px}
+    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 6px 8px;flex-wrap:wrap}
+    .titleWrap{display:flex;flex-direction:column;gap:4px;min-width:240px}
+    .title{font-family:var(--fontTitle);font-size:clamp(18px,2.4vw,26px);color:var(--blue);font-weight:800;letter-spacing:.2px;line-height:1.05}
+    /* ✅ Message RGPD petit, sous le titre */
+    .rgpdInline{
+      font-size:11px;
+      color:rgba(0,0,0,.55);
+      font-weight:700;
+      line-height:1.2;
+      user-select:none;
+    }
+
     .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
     select, button{
       font-family:var(--font);font-size:14px;border-radius:12px;border:1px solid rgba(0,0,0,.18);
@@ -106,7 +116,6 @@
     }
     .molStack{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:100%}
     .molClone{display:flex;align-items:center;justify-content:center}
-    /* ✅ séparation plus marquée entre atomes isolés (quand on affiche plusieurs atomes) */
     .molClone.atomClone{
       padding:6px;
       border-radius:16px;
@@ -194,7 +203,6 @@
       border:2px solid rgba(0,0,0,.18);
       box-shadow:0 10px 18px rgba(0,0,0,.18);
       display:grid;place-items:center;cursor:pointer;user-select:none;
-      z-index: 3;
     }
     .nextBubble:active{transform:scale(.98)}
     .triangle{
@@ -202,28 +210,6 @@
       border-left:16px solid rgba(0,0,0,.55);margin-left:3px;
     }
     .tiny{color:rgba(0,0,0,.62);font-size:12px;text-align:center;margin-top:10px}
-
-    /* ✅ Note RGPD en bas à gauche */
-    .rgpdNote{
-      position:absolute;
-      left:12px;
-      bottom:12px;
-      max-width: 420px;
-      padding:8px 10px;
-      border-radius:12px;
-      border:1px solid rgba(0,0,0,.12);
-      background: rgba(255,255,255,.85);
-      box-shadow:0 6px 14px rgba(0,0,0,.08);
-      font-size:12px;
-      color:rgba(0,0,0,.70);
-      font-weight:800;
-      line-height:1.25;
-      z-index: 2;
-      user-select:none;
-    }
-    @media (max-width:700px){
-      .rgpdNote{max-width: 260px;font-size:11px;}
-    }
   </style>
 </head>
 
@@ -233,7 +219,11 @@
 
   <div class="card">
     <div class="topbar">
-      <div class="title">Jeu — Atomes & Molécules (4e)</div>
+      <div class="titleWrap">
+        <div class="title">Jeu — Atomes & Molécules (4e)</div>
+        <div class="rgpdInline">Ce jeu ne collecte aucune donnée personnelle et ne nécessite aucune inscription</div>
+      </div>
+
       <div class="controls">
         <label style="display:flex;align-items:center;gap:8px">
           Niveau :
@@ -303,31 +293,23 @@
       <div class="nextBubble" id="nextBubble" title="Question suivante">
         <div class="triangle"></div>
       </div>
-
-      <!-- ✅ Message RGPD -->
-      <div class="rgpdNote" title="Information RGPD">
-        Ce jeu ne collecte aucune donnée personnelle et ne nécessite aucune inscription
-      </div>
     </div>
   </div>
 </div>
 
 <script>
 (() => {
-  // ===== Atoms (including extra ones for "Atome ou molécule ?") =====
   const ATOMS = {
     H:  { name:"Hydrogène", color:"#ffffff", border:"rgba(0,0,0,.28)" },
     O:  { name:"Oxygène",   color:"#ff1e1e", border:"rgba(0,0,0,.22)" },
     C:  { name:"Carbone",   color:"#111111", border:"rgba(0,0,0,.22)" },
     N:  { name:"Azote",     color:"#2f66ff", border:"rgba(0,0,0,.22)" },
 
-    // only used in "Atome ou molécule ?"
     Co: { name:"Cobalt",    color:"#7f8c8d", border:"rgba(0,0,0,.22)" },
     Cl: { name:"Chlore",    color:"#2ecc71", border:"rgba(0,0,0,.22)" },
     Ca: { name:"Calcium",   color:"#f39c12", border:"rgba(0,0,0,.22)" },
   };
 
-  // ===== Molecules =====
   const MOLECULES = [
     { key:"H2O", name:"Eau",               html:"H<small>2</small>O", counts:{H:2,O:1}, atoms:["H","O","H"] },
     { key:"CO2", name:"Dioxyde de carbone",html:"CO<small>2</small>", counts:{C:1,O:2}, atoms:["O","C","O"] },
@@ -338,16 +320,13 @@
     { key:"N2O", name:"Protoxyde d’azote", html:"N<small>2</small>O", counts:{N:2,O:1}, atoms:["N","N","O"] },
   ];
 
-  // only for "Atome ou molécule ?"
   const EXTRA_MOLECULES_ATOM_OR_MOL = [
     { key:"CO", name:"Monoxyde de carbone", html:"CO", counts:{C:1,O:1}, atoms:["C","O"] }
   ];
 
-  // ===== Difficulty profiles =====
-  // ✅ Limite de coefficient :
-  //    - Débutant : 3
-  //    - Moyen    : 10
-  //    - Expert   : 20
+  // ✅ limites de coefficients demandées :
+  // Débutant : 3 ; Moyen : 10 ; Expert : 20
+  // (le mode compter expert a aussi max=20 pour rester dans ta contrainte)
   const LEVELS = {
     beginner: {
       ftm:   { multiProb: 0.55, terms: [1,2], coefMin: 1, coefMax: 3,  atomProb: 0.35 },
@@ -361,14 +340,13 @@
     },
     expert: {
       ftm:   { multiProb: 0.85, terms: [3,4], coefMin: 1, coefMax: 20, atomProb: 0.45 },
-      count: { terms: [3,4], coefMin: 5, coefMax: 20, atomProb: 0.35 },
+      count: { terms: [3,4], coefMin: 1, coefMax: 20, atomProb: 0.35 },
       mix:   { ftmProb: 0.45, countProb: 0.45, aomProb: 0.10 }
     }
   };
 
-  // ===== Lock / unlock Expert =====
   const EXPERT_UNLOCK_KEY = "expertUnlocked";
-  const SCORE_TO_UNLOCK = 70; // % minimum pour débloquer Expert
+  const SCORE_TO_UNLOCK = 70;
 
   const $ = (id) => document.getElementById(id);
   const elMode = $("mode");
@@ -500,7 +478,6 @@
     }
   }
 
-  // ===== Visual helpers =====
   function makeAtom(sym){
     const data = ATOMS[sym];
     const a = document.createElement("div");
@@ -575,14 +552,11 @@
     return "small";
   }
 
-  // ===== Language helpers =====
   function deOrD(sym){
     const map = { H: "d’hydrogène", O: "d’oxygène", N: "d’azote", C: "de carbone" };
     return map[sym] || ("de " + sym);
   }
 
-  // ===== Term structure =====
-  // term = { kind:"atom", sym:"H", coef:2 } OR { kind:"molecule", key:"H2O", coef:3 }
   const BASE_ATOMS_FOR_MAIN_MODES = ["H","O","C","N"];
 
   function termToHTML(t){
@@ -654,7 +628,6 @@
     return wrap;
   }
 
-  // ===== Question selection =====
   function pickQuestionType(){
     const mode = elMode.value;
     const cfg = levelCfg().mix;
@@ -669,7 +642,6 @@
     return "atomOrMolecule";
   }
 
-  // ===== Mode: Passer de la formule au modèle =====
   function buildFormulaToModel(){
     const cfg = levelCfg().ftm;
 
@@ -815,7 +787,6 @@
     setStats();
   }
 
-  // ===== Mode: Compter des atomes (avec atomes isolés) =====
   function buildCountQuestion(){
     const cfg = levelCfg().count;
 
@@ -922,7 +893,6 @@
     setStats();
   }
 
-  // ===== Mode: Atome ou molécule ? =====
   function buildAtomOrMolecule(){
     const atomPool = ["H","O","C","N","Co","Cl","Ca"];
     const molPool = [...MOLECULES.map(m=>m.key), ...EXTRA_MOLECULES_ATOM_OR_MOL.map(m=>m.key)];
@@ -1001,7 +971,6 @@
     setStats();
   }
 
-  // ===== Flow =====
   function nextQuestion(){
     if (!running) return;
     if (qNum >= qMax){ finish(); return; }
@@ -1029,7 +998,6 @@
     nextQuestion();
   }
 
-  // ===== Decorative background =====
   function buildBackground(){
     const bg = document.getElementById("bgmols");
     const samples = ["H2O","CO2","O2","H2","N2","CH4","N2O"];
@@ -1053,7 +1021,6 @@
     });
   }
 
-  // Events
   elStart.addEventListener("click", startGame);
   elNextBubble.addEventListener("click", nextQuestion);
   elCheck.addEventListener("click", checkCountAnswer);
